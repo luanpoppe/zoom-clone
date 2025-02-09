@@ -6,9 +6,10 @@
 import { useGetCalls } from "@/hooks/useGetCalls";
 import { Call, CallRecording } from "@stream-io/video-react-sdk";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MeetingCard } from "./MeetingCard";
 import { Loader } from "./Loader";
+import { useToast } from "@/hooks/use-toast";
 
 type CallListProps = {
   type: "upcoming" | "ended" | "recordings";
@@ -19,6 +20,7 @@ export function CallList({ type }: CallListProps) {
     useGetCalls();
   const [recordings, setRecordings] = useState<CallRecording[]>([]);
   const router = useRouter();
+  const { toast } = useToast();
 
   function getCalls() {
     if (type === "ended") return endedCalls;
@@ -33,6 +35,27 @@ export function CallList({ type }: CallListProps) {
     if (type === "upcoming") return "No Upcoming Calls";
     return "";
   }
+
+  useEffect(() => {
+    async function fetchRecordings() {
+      try {
+        const callData = await Promise.all(
+          callRecordings.map((meeting) => meeting.queryRecordings())
+        );
+        const recordings = callData
+          .filter((call) => call.recordings.lenght > 0)
+          .flatMap((call) => call.recordings);
+
+        setRecordings(recordings);
+      } catch (error) {
+        console.error(error);
+        toast({
+          title: "Try again later",
+        });
+      }
+    }
+    if (type === "recordings") fetchRecordings();
+  }, [type, callRecordings]);
 
   const calls = getCalls();
   console.log("calls: ", calls);
@@ -54,11 +77,12 @@ export function CallList({ type }: CallListProps) {
                 : "/icons/recordings.svg"
             }
             title={
-              (meeting as Call).state.custom.description.substring(0, 25) ||
+              (meeting as Call).state?.custom.description.substring(0, 25) ||
+              meeting.filename.substring(0, 20) ||
               "No description"
             }
             date={
-              meeting.state.startsAt.toLocaleString() ||
+              meeting.state?.startsAt.toLocaleString() ||
               meeting.start_time.toLocaleString()
             }
             isPreviousMeeting={type === "ended"}
